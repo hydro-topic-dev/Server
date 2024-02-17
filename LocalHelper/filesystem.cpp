@@ -1,4 +1,6 @@
 #include "filesystem.h"
+
+#include <stack>
 using std::bad_cast;
 using std::invalid_argument;
 using std::make_unique;
@@ -7,6 +9,7 @@ using std::next;
 using std::prev;
 using std::reference_wrapper;
 using std::runtime_error;
+using std::stack;
 using std::string;
 using std::unique_ptr;
 using std::unordered_set;
@@ -38,7 +41,7 @@ server::File::File(std::string&& name, std::string&& content) noexcept
     , m_content(move(content))
 {}
 
-void server::Folder::copy_files_from_folder(const unordered_set<unique_ptr<FileBase>>& files)
+void server::Folder::copy_files_from_folder(const container_of_file& files)
 {
     for (const auto& e : files) {
         const auto& type = typeid(*e);
@@ -60,7 +63,7 @@ server::Folder::Folder(const string& name) : FileBase(name) {}
 
 server::Folder::Folder(string&& name) : FileBase(move(name)) {}
 
-const server::FileBase& server::Folder::find_file(const string& name) const
+const server::FileBase& server::Folder::search_file(const string& name) const
 {
     for (const auto& file : m_files) {
         if (file->name() == name) {
@@ -71,7 +74,7 @@ const server::FileBase& server::Folder::find_file(const string& name) const
     throw invalid_argument{ "Unknown filename." };
 }
 
-server::FileBase& server::Folder::find_file(const string& name)
+server::FileBase& server::Folder::search_file(const string& name)
 {
     for (const auto& file : m_files) {
         if (file->name() == name) {
@@ -102,7 +105,7 @@ bool server::Folder::has_file(const string& name) const noexcept
 const server::File& server::Folder::get_file(const string& name) const
 {
     try {
-        return dynamic_cast<const File&>(find_file(name));
+        return dynamic_cast<const File&>(search_file(name));
     } catch (bad_cast) {
         throw runtime_error{ "The name does not refer to a file." };
     }
@@ -111,7 +114,7 @@ const server::File& server::Folder::get_file(const string& name) const
 server::File& server::Folder::get_file(const string& name)
 {
     try {
-        return dynamic_cast<File&>(find_file(name));
+        return dynamic_cast<File&>(search_file(name));
     } catch (bad_cast) {
         throw runtime_error{ "The name does not refer to a file." };
     }
@@ -120,7 +123,7 @@ server::File& server::Folder::get_file(const string& name)
 const server::Folder& server::Folder::get_folder(const string& name) const
 {
     try {
-        return dynamic_cast<const Folder&>(find_file(name));
+        return dynamic_cast<const Folder&>(search_file(name));
     } catch (bad_cast) {
         throw runtime_error{ "The name does not refer to a folder." };
     }
@@ -129,7 +132,7 @@ const server::Folder& server::Folder::get_folder(const string& name) const
 server::Folder& server::Folder::get_folder(const string& name)
 {
     try {
-        return dynamic_cast<Folder&>(find_file(name));
+        return dynamic_cast<Folder&>(search_file(name));
     } catch (bad_cast) {
         throw runtime_error{ "The name does not refer to a folder." };
     }
@@ -216,8 +219,16 @@ bool server::FileSystem::remove(const filesystem::path& path)
     return folder.remove(path.filename().generic_string());
 }
 
-vector<reference_wrapper<const server::File>> server::FileSystem::find_file(const string& name
+vector<reference_wrapper<const server::File>> server::FileSystem::search_file(const string& name
 ) const
 {
-    vector<reference_wrapper<const server::File>> found_files;
+    vector<reference_wrapper<const File>> found_files;
+    stack<reference_wrapper<const Folder>> recursive_stack;
+    for (const auto& file : m_root) {
+        if (typeid(file) == typeid(Folder)) {
+            recursive_stack.push(static_cast<const Folder&>(file));
+        }
+    }
+
+    // TODO: finish it
 }

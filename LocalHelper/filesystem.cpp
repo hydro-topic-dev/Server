@@ -1,45 +1,21 @@
 #include "filesystem.h"
 
-#include <stack>
+#include <queue>
 using std::bad_cast;
 using std::invalid_argument;
 using std::make_unique;
 using std::move;
 using std::next;
 using std::prev;
+using std::queue;
 using std::reference_wrapper;
 using std::runtime_error;
-using std::stack;
 using std::string;
 using std::unique_ptr;
 using std::unordered_set;
 using std::vector;
 namespace filesystem = std::filesystem;
 namespace ranges = std::ranges;
-
-server::FileBase::FileBase(const string& name) : m_name(name) {}
-
-server::FileBase::FileBase(string&& name) noexcept : m_name(move(name)) {}
-
-server::File::File(const std::string& name, const std::string& content)
-    : FileBase(name)
-    , m_content(content)
-{}
-
-server::File::File(const std::string& name, std::string&& content)
-    : FileBase(name)
-    , m_content(move(content))
-{}
-
-server::File::File(std::string&& name, const std::string& content)
-    : FileBase(move(name))
-    , m_content(content)
-{}
-
-server::File::File(std::string&& name, std::string&& content) noexcept
-    : FileBase(move(name))
-    , m_content(move(content))
-{}
 
 void server::Folder::copy_files_from_folder(const container_of_file& files)
 {
@@ -223,12 +199,41 @@ vector<reference_wrapper<const server::File>> server::FileSystem::search_file(co
 ) const
 {
     vector<reference_wrapper<const File>> found_files;
-    stack<reference_wrapper<const Folder>> recursive_stack;
-    for (const auto& file : m_root) {
-        if (typeid(file) == typeid(Folder)) {
-            recursive_stack.push(static_cast<const Folder&>(file));
+    queue<reference_wrapper<const Folder>> unvisited_folders;
+    unvisited_folders.emplace(m_root);
+
+    while (!unvisited_folders.empty()) {
+        for (const auto& file : unvisited_folders.front().get()) {
+            if (typeid(file) == typeid(Folder)) {
+                unvisited_folders.push(file.to_actually_type<Folder>());
+            } else if (file.name() == name) {
+                found_files.emplace_back(file.to_actually_type<File>());
+            }
         }
+
+        unvisited_folders.pop();
     }
 
-    // TODO: finish it
+    return found_files;
+}
+
+vector<reference_wrapper<server::File>> server::FileSystem::search_file(const string& name)
+{
+    vector<reference_wrapper<File>> found_files;
+    queue<reference_wrapper<Folder>> unvisited_folders;
+    unvisited_folders.emplace(m_root);
+
+    while (!unvisited_folders.empty()) {
+        for (auto& file : unvisited_folders.front().get()) {
+            if (typeid(file) == typeid(Folder)) {
+                unvisited_folders.emplace(file.to_actually_type<Folder>());
+            } else if (file.name() == name) {
+                found_files.emplace_back(file.to_actually_type<File>());
+            }
+        }
+
+        unvisited_folders.pop();
+    }
+
+    return found_files;
 }

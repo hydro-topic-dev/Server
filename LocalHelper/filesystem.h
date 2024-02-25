@@ -27,22 +27,28 @@ namespace server
     class FileBase;
 
     template <typename Iter>
-    concept folder_files_iterator = requires {
-        requires std::forward_iterator<Iter> && std::same_as<
-                                                    std::decay_t<typename Iter::value_type>,
-                                                    std::unique_ptr<FileBase>>;
-    };
+    concept folder_files_iterator =
+        std::forward_iterator<Iter> &&
+        std::same_as<std::decay_t<typename Iter::value_type>, std::unique_ptr<FileBase>>;
 
     class FileBase
     {
     public:
-        virtual ~FileBase() = default;
-        FileBase(const std::string& name);
-        FileBase(std::string&& name) noexcept;
+        constexpr virtual ~FileBase() = default;
+        constexpr FileBase(const std::string& name);
+        constexpr FileBase(std::string&& name) noexcept;
 
-        inline std::string name() const noexcept;
-        inline void rename(const std::string& new_name);
-        inline void rename(std::string&& new_name) noexcept;
+        constexpr std::string name() const noexcept;
+        constexpr void rename(const std::string& new_name);
+        constexpr void rename(std::string&& new_name) noexcept;
+
+        template <typename T>
+        constexpr const T& to_actually_type() const noexcept
+        requires std::is_base_of_v<FileBase, T>;
+
+        template <typename T>
+        constexpr T& to_actually_type() noexcept
+        requires std::is_base_of_v<FileBase, T>;
     private:
         std::string m_name;
     };
@@ -51,19 +57,15 @@ namespace server
     {
     public:
         File() = delete;
-        File(const File&) = default;
-        File(File&&) noexcept = default;
-        File(const std::string& name, const std::string& content);
-        File(const std::string& name, std::string&& content);
-        File(std::string&& name, const std::string& content);
-        File(std::string&& name, std::string&& content) noexcept;
+        constexpr File(const File&) = default;
+        constexpr File(const std::string& name, const std::string& content);
+        constexpr File(const std::string& name, std::string&& content);
+        constexpr File(std::string&& name, const std::string& content);
+        constexpr File(std::string&& name, std::string&& content) noexcept;
 
-        File& operator=(const File&) = default;
-        File& operator=(File&&) noexcept = default;
-
-        inline std::string content() const noexcept;
-        inline void change_content(const std::string& new_content);
-        inline void change_content(std::string&& new_content) noexcept;
+        constexpr std::string content() const noexcept;
+        constexpr void change_content(const std::string& new_content);
+        constexpr void change_content(std::string&& new_content) noexcept;
     private:
         std::string m_content;
     };
@@ -79,25 +81,10 @@ namespace server
 
         using Iter::Iter;
 
-        const reference operator*() const
-        {
-            return *(*static_cast<const original_type&>(*this));
-        }
-
-        reference operator*()
-        {
-            return *(*static_cast<original_type&>(*this));
-        }
-
-        const pointer operator->() const
-        {
-            return &(*(*this));
-        }
-
-        pointer operator->()
-        {
-            return &(*(*this));
-        }
+        constexpr const reference operator*() const;
+        constexpr reference operator*();
+        constexpr const pointer operator->() const;
+        constexpr pointer operator->();
     };
 
     class Folder : public FileBase
@@ -106,26 +93,20 @@ namespace server
         using container_of_file = std::unordered_set<std::unique_ptr<FileBase>>;
     public:
         using iterator = FolderIteratorBase<container_of_file::iterator>;
-        using const_iterator =
-            FolderIteratorBase<container_of_file::const_iterator>;
+        using const_iterator = FolderIteratorBase<container_of_file::const_iterator>;
     private:
         void copy_files_from_folder(const container_of_file& files);
         const FileBase& search_file(const std::string& name) const;
         FileBase& search_file(const std::string& name);
     public:
-        // How duplicate files are handled
-        enum class ProcessingSameNameFiles
+        // What to do with files with the same name
+        enum class HowToHandleFilesWithTheSameName
         {
             overwrite,
             throw_exception
         };
 
-        static inline ProcessingSameNameFiles get_way_of_handling_same_name_files() noexcept;
-        static inline void change_way_of_handling_same_name_files(ProcessingSameNameFiles processing
-        ) noexcept;
-
         Folder() = delete;
-        Folder(Folder&&) noexcept = default;
         Folder(const Folder& right);
         Folder(const std::string& name);
         Folder(std::string&& name);
@@ -149,14 +130,13 @@ namespace server
         const Folder& get_folder(const std::string& name) const;
         Folder& get_folder(const std::string& name);
         template <typename FileType>
-        decltype(auto) add(FileType&& file)
+        decltype(auto)
+        add(FileType&& file, HowToHandleFilesWithTheSameName how_to_handle_files_with_the_same_name)
         requires std::is_base_of_v<FileBase, std::decay_t<FileType>>;
         bool remove(const std::string& name) noexcept;
     private:
         container_of_file m_files;
         Folder* m_parent = nullptr;
-        static inline ProcessingSameNameFiles m_processing_same_name_files =
-            ProcessingSameNameFiles::throw_exception;
     };
 
     class FileSystem
@@ -167,8 +147,6 @@ namespace server
     public:
         FileSystem();
         FileSystem(const FileSystem&) = default;
-        FileSystem(FileSystem&&) noexcept = default;
-        ~FileSystem() = default;
 
         const File& get_file(const std::filesystem::path& path) const;
         File& get_file(const std::filesystem::path& path);
@@ -183,53 +161,103 @@ namespace server
         std::vector<std::reference_wrapper<const File>> search_file(const std::string& name) const;
         std::vector<std::reference_wrapper<File>> search_file(const std::string& name);
     private:
+        Folder m_root;
         std::filesystem::path m_active_path;
         Folder* m_active_folder;
-        Folder m_root;
     };
 
-    inline std::string FileBase::name() const noexcept
+    constexpr FileBase::FileBase(const std::string& name) : m_name(name) {}
+
+    constexpr FileBase::FileBase(std::string&& name) noexcept : m_name(move(name)) {}
+
+    constexpr File::File(const std::string& name, const std::string& content)
+        : FileBase(name)
+        , m_content(content)
+    {}
+
+    constexpr server::File::File(const std::string& name, std::string&& content)
+        : FileBase(name)
+        , m_content(move(content))
+    {}
+
+    constexpr server::File::File(std::string&& name, const std::string& content)
+        : FileBase(move(name))
+        , m_content(content)
+    {}
+
+    constexpr server::File::File(std::string&& name, std::string&& content) noexcept
+        : FileBase(move(name))
+        , m_content(move(content))
+    {}
+
+    constexpr std::string FileBase::name() const noexcept
     {
         return m_name;
     }
 
-    inline void FileBase::rename(const std::string& new_name)
+    constexpr void FileBase::rename(const std::string& new_name)
     {
         m_name = new_name;
     }
 
-    inline void FileBase::rename(std::string&& new_name) noexcept
+    constexpr void FileBase::rename(std::string&& new_name) noexcept
     {
         using std::move;
         m_name = new_name;
     }
 
-    inline std::string File::content() const noexcept
+    template <typename T>
+    constexpr const T& FileBase::to_actually_type() const noexcept
+    requires std::is_base_of_v<FileBase, T>
+    {
+        return static_cast<const T&>(*this);
+    }
+
+    template <typename T>
+    constexpr T& FileBase::to_actually_type() noexcept
+    requires std::is_base_of_v<FileBase, T>
+    {
+        return static_cast<T&>(*this);
+    }
+
+    constexpr std::string File::content() const noexcept
     {
         return m_content;
     }
 
-    inline void File::change_content(const std::string& new_content)
+    constexpr void File::change_content(const std::string& new_content)
     {
         m_content = new_content;
     }
 
-    inline void File::change_content(std::string&& new_content) noexcept
+    constexpr void File::change_content(std::string&& new_content) noexcept
     {
         using std::move;
         m_content = move(new_content);
     }
 
-    inline Folder::ProcessingSameNameFiles
-    server::Folder::get_way_of_handling_same_name_files() noexcept
+    template <folder_files_iterator Iter>
+    constexpr const FolderIteratorBase<Iter>::reference FolderIteratorBase<Iter>::operator*() const
     {
-        return m_processing_same_name_files;
+        return *(*static_cast<const original_type&>(*this));
     }
 
-    inline void Folder::change_way_of_handling_same_name_files(ProcessingSameNameFiles processing
-    ) noexcept
+    template <folder_files_iterator Iter>
+    constexpr FolderIteratorBase<Iter>::reference FolderIteratorBase<Iter>::operator*()
     {
-        m_processing_same_name_files = processing;
+        return *(*static_cast<original_type&>(*this));
+    }
+
+    template <folder_files_iterator Iter>
+    constexpr const FolderIteratorBase<Iter>::pointer FolderIteratorBase<Iter>::operator->() const
+    {
+        return &(*(*this));
+    }
+
+    template <folder_files_iterator Iter>
+    constexpr FolderIteratorBase<Iter>::pointer FolderIteratorBase<Iter>::operator->()
+    {
+        return &(*(*this));
     }
 
     inline Folder::const_iterator Folder::cbegin() const noexcept
@@ -283,7 +311,10 @@ namespace server
     }
 
     template <typename FileType>
-    decltype(auto) Folder::add(FileType&& file)
+    decltype(auto) Folder::add(
+        FileType&& file,
+        HowToHandleFilesWithTheSameName how_to_handle_files_with_the_same_name
+    )
     requires std::is_base_of_v<FileBase, std::decay_t<FileType>>
     {
         using std::abort;
@@ -298,8 +329,8 @@ namespace server
                 *(*(m_files.insert(make_unique<real_type>(forward<FileType>(file))).first));
             return static_cast<real_type&>(added_file);
         } else {
-            switch (m_processing_same_name_files) {
-            case server::Folder::ProcessingSameNameFiles::overwrite:
+            switch (how_to_handle_files_with_the_same_name) {
+            case server::Folder::HowToHandleFilesWithTheSameName::overwrite:
                 {
                     const auto& type = typeid(real_type);
                     assert(type == typeid(File) || type == typeid(Folder));
@@ -313,7 +344,7 @@ namespace server
                     static_cast<real_type&>(*found_file) = forward<FileType>(file);
                     return static_cast<real_type&>(*found_file);
                 }
-            case server::Folder::ProcessingSameNameFiles::throw_exception:
+            case server::Folder::HowToHandleFilesWithTheSameName::throw_exception:
                 throw runtime_error{ "A file with the same name exists" };
             default:
                 assert(false);
